@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/axios";
 
 export default function Todos() {
@@ -28,6 +29,14 @@ export default function Todos() {
     setTodos((prev) => prev.filter((t) => t._id !== id));
   };
 
+  const toggleComplete = async (todo) => {
+    const res = await api.put(`/todos/${todo._id}`, {
+      completed: !todo.completed,
+    });
+
+    setTodos((prev) => prev.map((t) => (t._id === todo._id ? res.data : t)));
+  };
+
   const startEdit = (todo) => {
     setEditingId(todo._id);
     setEditTitle(todo.title);
@@ -46,14 +55,18 @@ export default function Todos() {
     });
 
     setTodos((prev) => prev.map((t) => (t._id === id ? res.data : t)));
-
     cancelEdit();
   };
 
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-md mx-auto bg-white rounded shadow p-4">
-        <h2 className="text-xl font-semibold mb-4 text-center">My Todos</h2>
+        {/* Back to Home */}
+        <Link to="/home" className="text-sm text-blue-500 hover:underline">
+          ← Back to Home
+        </Link>
+
+        <h2 className="text-xl font-semibold mb-4 text-center">Manage Todos</h2>
 
         {/* Add Todo */}
         <div className="flex gap-2 mb-4">
@@ -81,18 +94,35 @@ export default function Todos() {
                 key={t._id}
                 className="flex items-center justify-between bg-gray-50 p-2 rounded border"
               >
-                {editingId === t._id ? (
+                <div className="flex items-center gap-2 flex-1">
                   <input
-                    className="border p-1 flex-1 mr-2 rounded"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
+                    type="checkbox"
+                    checked={t.completed}
+                    onChange={() => toggleComplete(t)}
                   />
-                ) : (
-                  <span className="text-gray-800 flex-1">{t.title}</span>
-                )}
+
+                  {editingId === t._id ? (
+                    <input
+                      className="border p-1 flex-1 rounded"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                    />
+                  ) : (
+                    <span
+                      onClick={() => toggleComplete(t)}
+                      className={`cursor-pointer ${
+                        t.completed
+                          ? "line-through text-gray-400"
+                          : "text-gray-800"
+                      }`}
+                    >
+                      {t.title}
+                    </span>
+                  )}
+                </div>
 
                 {editingId === t._id ? (
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 ml-2">
                     <button
                       onClick={() => saveEdit(t._id)}
                       className="text-green-600 text-sm"
@@ -107,7 +137,7 @@ export default function Todos() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 ml-2">
                     <button
                       onClick={() => startEdit(t)}
                       className="text-blue-500 text-sm"

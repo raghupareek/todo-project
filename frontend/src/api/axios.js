@@ -10,20 +10,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor: on 401 remove token and redirect to login
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    if (status === 401) {
-      try {
-        localStorage.removeItem("token");
-        // Guarantee we don't run into react-router history issues here:
-        window.location.href = "/login";
-      } catch (e) {
-        console.error("Failed to handle 401:", e);
-      }
+    const url = error.config?.url || "";
+
+    const isAuthRoute =
+      url.includes("/auth/login") || url.includes("/auth/register");
+
+    if (status === 401 && !isAuthRoute) {
+      localStorage.removeItem("token");
+      window.location.href = "/login";
     }
+
     return Promise.reject(error);
   }
 );
