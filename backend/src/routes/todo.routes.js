@@ -14,5 +14,7 @@ router.get("/", getTodos);
 router.post("/", createTodo);
 router.put("/:id", updateTodo);
 router.delete("/:id", deleteTodo);
+router.get("/", getTodos); // supports ?list=LIST_ID
+router.post("/", createTodo); // requires list
 
 export default router;

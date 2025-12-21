@@ -19,6 +19,7 @@ export default function App() {
           <Route element={<Navbar />}>
             <Route path="/home" element={<Home />} />
             <Route path="/todos" element={<Todos />} />
+            <Route path="/todos/:listId" element={<Todos />} />
           </Route>
         </Route>
 
