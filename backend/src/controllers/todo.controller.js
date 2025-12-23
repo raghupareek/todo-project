@@ -1,61 +1,32 @@
-import Todo from "../models/Todo.js";
+import {
+  getTodos as getTodosService,
+  createTodo as createTodoService,
+  updateTodo as updateTodoService,
+  deleteTodo as deleteTodoService,
+} from "../services/todo.service.js";
+import catchErrors from "../utils/catchErrors.js";
 
-/* ================= GET TODOS ================= */
-export const getTodos = async (req, res) => {
-  const filter = { user: req.userId };
-  if (req.query.list) filter.list = req.query.list;
-  const todos = await Todo.find(filter);
+export const getTodos = catchErrors(async (req, res) => {
+  const todos = await getTodosService(req.userId, req.query.list);
   res.json(todos);
-};
+});
 
-/* ================= CREATE TODO ================= */
-export const createTodo = async (req, res) => {
+export const createTodo = catchErrors(async (req, res) => {
   const { title, list } = req.body;
-
-  if (!list) {
-    return res.status(400).json({ message: "Checklist (list) is required" });
-  }
-
-  const todo = await Todo.create({
-    title,
-    list, // 👈 NEW
-    user: req.userId,
-  });
-
+  const todo = await createTodoService(title, list, req.userId);
   res.status(201).json(todo);
-};
+});
 
-/* ================= UPDATE TODO ================= */
-export const updateTodo = async (req, res) => {
+export const updateTodo = catchErrors(async (req, res) => {
   const { title, completed } = req.body;
-
-  const todo = await Todo.findOne({
-    _id: req.params.id,
-    user: req.userId,
+  const todo = await updateTodoService(req.params.id, req.userId, {
+    title,
+    completed,
   });
-
-  if (!todo) {
-    return res.status(404).json({ message: "Todo not found" });
-  }
-
-  if (title !== undefined) todo.title = title;
-  if (completed !== undefined) todo.completed = completed;
-
-  await todo.save();
   res.json(todo);
-};
+});
 
-/* ================= DELETE TODO ================= */
-export const deleteTodo = async (req, res) => {
-  const todo = await Todo.findOne({
-    _id: req.params.id,
-    user: req.userId,
-  });
-
-  if (!todo) {
-    return res.status(404).json({ message: "Todo not found" });
-  }
-
-  await todo.deleteOne();
+export const deleteTodo = catchErrors(async (req, res) => {
+  await deleteTodoService(req.params.id, req.userId);
   res.json({ message: "Todo deleted" });
-};
+});

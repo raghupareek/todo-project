@@ -1,80 +1,37 @@
-import TodoList from "../models/TodoList.js";
-import Todo from "../models/Todo.js";
+import {
+  getLists as getListsService,
+  getListById as getListByIdService,
+  createList as createListService,
+  updateListTitle as updateListTitleService,
+  deleteList as deleteListService,
+} from "../services/todolist.service.js";
+import catchErrors from "../utils/catchErrors.js";
 
-/**
- * GET all checklists for logged-in user
- */
-export const getLists = async (req, res) => {
-  const lists = await TodoList.find({ user: req.userId });
+export const getLists = catchErrors(async (req, res) => {
+  const lists = await getListsService(req.userId);
   res.json(lists);
-};
+});
 
-/**
- * GET single checklist by ID
- */
-export const getListById = async (req, res) => {
-  const list = await TodoList.findOne({
-    _id: req.params.id,
-    user: req.userId,
-  });
-
-  if (!list) {
-    return res.status(404).json({ message: "Checklist not found" });
-  }
-
+export const getListById = catchErrors(async (req, res) => {
+  const list = await getListByIdService(req.params.id, req.userId);
   res.json(list);
-};
+});
 
-/**
- * CREATE new checklist
- */
-export const createList = async (req, res) => {
-  const list = await TodoList.create({
-    title: req.body.title,
-    user: req.userId,
-  });
+export const createList = catchErrors(async (req, res) => {
+  const list = await createListService(req.body.title, req.userId);
   res.status(201).json(list);
-};
+});
 
-/**
- * UPDATE checklist title
- */
-export const updateListTitle = async (req, res) => {
-  const { title } = req.body;
-
-  if (!title?.trim()) {
-    return res.status(400).json({ message: "Title is required" });
-  }
-
-  const list = await TodoList.findOneAndUpdate(
-    { _id: req.params.id, user: req.userId },
-    { title },
-    { new: true }
+export const updateListTitle = catchErrors(async (req, res) => {
+  const list = await updateListTitleService(
+    req.params.id,
+    req.userId,
+    req.body.title
   );
-
-  if (!list) {
-    return res.status(404).json({ message: "Checklist not found" });
-  }
-
   res.json(list);
-};
+});
 
-/**
- * DELETE checklist + all its todos
- */
-export const deleteList = async (req, res) => {
-  const list = await TodoList.findOne({
-    _id: req.params.id,
-    user: req.userId,
-  });
-
-  if (!list) {
-    return res.status(404).json({ message: "Checklist not found" });
-  }
-
-  // IMPORTANT: delete all todos in this list
-  await Todo.deleteMany({ list: list._id });
-
-  await list.deleteOne();
+export const deleteList = catchErrors(async (req, res) => {
+  await deleteListService(req.params.id, req.userId);
   res.json({ message: "Checklist deleted" });
-};
+});
