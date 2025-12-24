@@ -29,12 +29,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
       <form
         onSubmit={handleSubmit}
-        className="bg-white p-6 rounded shadow-md w-80"
+        className="bg-white dark:bg-gray-800 p-6 rounded shadow-md w-80"
       >
-        <h2 className="text-xl font-semibold mb-4 text-center">Login</h2>
+        <h2 className="text-xl font-semibold mb-4 text-center text-gray-900 dark:text-white">
+          Login
+        </h2>
 
         {error && (
           <p className="text-red-500 text-sm mb-3 text-center">{error}</p>
@@ -43,7 +45,7 @@ export default function Login() {
         <input
           type="email"
           placeholder="Email"
-          className="border p-2 w-full mb-3 rounded"
+          className="border dark:border-gray-600 p-2 w-full mb-3 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
@@ -52,7 +54,7 @@ export default function Login() {
         <input
           type="password"
           placeholder="Password"
-          className="border p-2 w-full mb-4 rounded"
+          className="border dark:border-gray-600 p-2 w-full mb-4 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -60,14 +62,17 @@ export default function Login() {
 
         <button
           type="submit"
-          className="bg-blue-500 text-white w-full py-2 rounded hover:bg-blue-600"
+          className="bg-blue-500 text-white w-full py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400"
         >
           Login
         </button>
 
-        <p className="text-sm text-center mt-4">
+        <p className="text-sm text-center mt-4 text-gray-600 dark:text-gray-400">
           Don’t have an account?{" "}
-          <Link to="/register" className="text-blue-500">
+          <Link
+            to="/register"
+            className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+          >
             Register
           </Link>
         </p>

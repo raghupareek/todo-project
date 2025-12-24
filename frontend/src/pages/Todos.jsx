@@ -9,9 +9,14 @@ export default function Todos() {
 
   const [currentListId, setCurrentListId] = useState(listId || null);
   const [todos, setTodos] = useState([]);
-  const [filter, setFilter] = useState("all"); // all | active | completed
+  const [deletedTodos, setDeletedTodos] = useState([]);
+  const [filter, setFilter] = useState("all"); // all | active | completed | trash
 
   const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [priority, setPriority] = useState("");
+  const [notes, setNotes] = useState("");
+  const [labels, setLabels] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   // checklist title
@@ -22,6 +27,10 @@ export default function Todos() {
   // todo editing
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editPriority, setEditPriority] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editLabels, setEditLabels] = useState("");
 
   const [dragId, setDragId] = useState(null);
 
@@ -30,21 +39,6 @@ export default function Todos() {
   const listTitleInputRef = useRef(null);
 
   const [dragOverId, setDragOverId] = useState(null);
-
-  useEffect(() => {
-    if (currentListId) {
-      fetchTodos();
-      fetchList();
-    }
-  }, [currentListId]);
-
-  useEffect(() => {
-    if (editingId) editInputRef.current?.focus();
-  }, [editingId]);
-
-  useEffect(() => {
-    if (editingListTitle) listTitleInputRef.current?.focus();
-  }, [editingListTitle]);
 
   const fetchList = async () => {
     const res = await api.get(`/todolists/${currentListId}`);
@@ -56,6 +50,32 @@ export default function Todos() {
     const res = await api.get(`/todos?list=${currentListId}`);
     setTodos(res.data);
   };
+
+  const fetchDeletedTodos = async () => {
+    const res = await api.get("/todos/deleted");
+    setDeletedTodos(res.data);
+  };
+
+  useEffect(() => {
+    if (currentListId) {
+      fetchTodos();
+      fetchList();
+    }
+  }, [currentListId]);
+
+  useEffect(() => {
+    if (filter === "trash") {
+      fetchDeletedTodos();
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    if (editingId) editInputRef.current?.focus();
+  }, [editingId]);
+
+  useEffect(() => {
+    if (editingListTitle) listTitleInputRef.current?.focus();
+  }, [editingListTitle]);
 
   const createChecklistIfNeeded = async () => {
     if (!listTitle.trim()) return;
@@ -79,21 +99,38 @@ export default function Todos() {
     if (!title.trim()) return;
     setIsSaving(true);
 
-    const res = await api.post("/todos", {
+    const todoData = {
       title,
       list: currentListId,
-    });
+      dueDate: dueDate || undefined,
+      priority,
+      notes: notes || undefined,
+      labels: labels
+        ? labels
+            .split(",")
+            .map((l) => l.trim())
+            .filter((l) => l)
+        : [],
+    };
+
+    const res = await api.post("/todos", todoData);
 
     setTodos((prev) => [...prev, res.data]);
     setTitle("");
+    setDueDate("");
+    setPriority("");
+    setNotes("");
+    setLabels("");
     setIsSaving(false);
     addInputRef.current?.focus();
   };
 
-  const deleteTodo = async (id) => {
-    if (!window.confirm("Delete this todo?")) return;
-    await api.delete(`/todos/${id}`);
-    setTodos((prev) => prev.filter((t) => t._id !== id));
+  const restoreTodo = async (id) => {
+    await api.put(`/todos/${id}/restore`);
+    setDeletedTodos((prev) => prev.filter((t) => t._id !== id));
+    if (filter !== "trash") {
+      fetchTodos(); // Refresh active todos
+    }
   };
 
   const toggleComplete = async (todo) => {
@@ -107,33 +144,69 @@ export default function Todos() {
     if (!editTitle.trim()) return;
     setIsSaving(true);
 
-    const res = await api.put(`/todos/${id}`, { title: editTitle });
+    const updateData = {
+      title: editTitle,
+      dueDate: editDueDate || undefined,
+      priority: editPriority,
+      notes: editNotes || undefined,
+      labels: editLabels
+        ? editLabels
+            .split(",")
+            .map((l) => l.trim())
+            .filter((l) => l)
+        : [],
+    };
+
+    const res = await api.put(`/todos/${id}`, updateData);
     setTodos((prev) => prev.map((t) => (t._id === id ? res.data : t)));
 
     setEditingId(null);
     setIsSaving(false);
   };
 
+  const startEdit = (todo) => {
+    setEditingId(todo._id);
+    setEditTitle(todo.title);
+    setEditDueDate(
+      todo.dueDate ? new Date(todo.dueDate).toISOString().split("T")[0] : ""
+    );
+    setEditPriority(todo.priority || "");
+    setEditNotes(todo.notes || "");
+    setEditLabels(todo.labels ? todo.labels.join(", ") : "");
+  };
+
   const cancelEdit = () => {
     setEditingId(null);
     setEditTitle("");
+    setEditDueDate("");
+    setEditPriority("");
+    setEditNotes("");
+    setEditLabels("");
   };
 
   /* =====================
      PROGRESS INDICATOR
   ====================== */
-  const completedCount = todos.filter((t) => t.completed).length;
+  const activeTodos = todos.filter((t) => !t.deleted);
+  const completedCount = activeTodos.filter((t) => t.completed).length;
   const progress =
-    todos.length === 0 ? 0 : Math.round((completedCount / todos.length) * 100);
+    activeTodos.length === 0
+      ? 0
+      : Math.round((completedCount / activeTodos.length) * 100);
 
   /* =====================
      FILTER LOGIC
   ====================== */
-  const filteredTodos = todos.filter((t) => {
-    if (filter === "active") return !t.completed;
-    if (filter === "completed") return t.completed;
-    return true;
-  });
+  const getFilteredTodos = () => {
+    if (filter === "trash") return deletedTodos;
+    return todos.filter((t) => {
+      if (filter === "active") return !t.completed;
+      if (filter === "completed") return t.completed;
+      return true;
+    });
+  };
+
+  const filteredTodos = getFilteredTodos();
 
   /* =====================
      DRAG & DROP
@@ -147,7 +220,7 @@ export default function Todos() {
     if (id !== dragId) setDragOverId(id);
   };
 
-  const handleDrop = (targetId) => {
+  const handleDrop = async (targetId) => {
     if (!dragId || dragId === targetId) return;
 
     const updated = [...todos];
@@ -158,16 +231,30 @@ export default function Todos() {
     updated.splice(to, 0, moved);
 
     setTodos(updated);
+
+    // Update order on server
+    const todoIds = updated.map((t) => t._id);
+    try {
+      await api.post("/todos/reorder", { listId: currentListId, todoIds });
+    } catch (error) {
+      console.error("Failed to reorder todos:", error);
+      // Revert on error
+      fetchTodos();
+    }
+
     setDragId(null);
     setDragOverId(null);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-md mx-auto bg-white rounded shadow p-4">
+    <div className="max-w-4xl mx-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
         {/* Breadcrumb */}
-        <div className="text-sm text-gray-500 mb-2">
-          <Link to="/home" className="text-blue-500">
+        <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+          <Link
+            to="/home"
+            className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300"
+          >
             Home
           </Link>
           {listTitle && <> / {listTitle}</>}
@@ -181,7 +268,7 @@ export default function Todos() {
 
             <div className="flex gap-2">
               <input
-                className="border p-2 flex-1 rounded"
+                className="border p-2 flex-1 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                 placeholder="Checklist title..."
                 value={listTitle}
                 onChange={(e) => setListTitle(e.target.value)}
@@ -192,7 +279,7 @@ export default function Todos() {
               <button
                 onClick={createChecklistIfNeeded}
                 disabled={!listTitle.trim()}
-                className="bg-blue-500 disabled:opacity-50 text-white px-4 rounded"
+                className="bg-blue-500 disabled:opacity-50 text-white px-4 rounded hover:bg-blue-600 dark:hover:bg-blue-400"
               >
                 Create
               </button>
@@ -206,7 +293,7 @@ export default function Todos() {
                 <>
                   <input
                     ref={listTitleInputRef}
-                    className="border p-2 rounded flex-1"
+                    className="border p-2 rounded flex-1 dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                     value={tempListTitle}
                     onChange={(e) => setTempListTitle(e.target.value)}
                     onKeyDown={(e) => {
@@ -227,7 +314,7 @@ export default function Todos() {
                   <h2 className="text-xl font-semibold">{listTitle}</h2>
                   <button
                     onClick={() => setEditingListTitle(true)}
-                    className="text-blue-500 text-sm"
+                    className="text-blue-500 dark:text-blue-400 text-sm hover:text-blue-600 dark:hover:text-blue-300"
                   >
                     Edit
                   </button>
@@ -237,12 +324,12 @@ export default function Todos() {
 
             {/* Progress Indicator */}
             <div className="mb-3">
-              <p className="text-sm text-gray-500 text-center mb-1">
-                {completedCount} / {todos.length} completed
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-1">
+                {completedCount} / {activeTodos.length} completed
               </p>
-              <div className="h-2 bg-gray-200 rounded">
+              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded">
                 <div
-                  className="h-2 bg-blue-500 rounded transition-all"
+                  className="h-2 bg-blue-500 dark:bg-blue-400 rounded transition-all"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -250,14 +337,14 @@ export default function Todos() {
 
             {/* Filter */}
             <div className="flex justify-center gap-2 mb-3">
-              {["all", "active", "completed"].map((f) => (
+              {["all", "active", "completed", "trash"].map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`text-sm px-3 py-1 rounded ${
                     filter === f
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-100 text-gray-600"
+                      ? "bg-blue-500 text-white hover:bg-blue-600 dark:hover:bg-blue-400"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   }`}
                 >
                   {f}
@@ -265,29 +352,70 @@ export default function Todos() {
               ))}
             </div>
 
-            {/* Sticky Add Todo */}
-            <div className="sticky top-0 bg-white pt-2 pb-3 z-10">
-              <div className="flex gap-2">
-                <input
-                  ref={addInputRef}
-                  className="border p-2 flex-1 rounded"
-                  placeholder="New todo..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addTodo()}
-                />
-                <button
-                  onClick={addTodo}
-                  disabled={!title.trim() || isSaving}
-                  className="bg-blue-500 disabled:opacity-50 text-white px-4 rounded"
-                >
-                  {isSaving ? "Saving..." : "Add"}
-                </button>
-              </div>
-            </div>
+            {filter !== "trash" && (
+              <>
+                {/* Sticky Add Todo */}
+                <div className="sticky top-0 bg-white dark:bg-gray-800 pt-2 pb-3 z-10 border-b dark:border-gray-700 mb-4">
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        ref={addInputRef}
+                        className="border p-2 flex-1 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                        placeholder="New todo..."
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addTodo()}
+                      />
+                      <button
+                        onClick={addTodo}
+                        disabled={!title.trim() || isSaving}
+                        className="bg-blue-500 disabled:opacity-50 text-white px-4 rounded hover:bg-blue-600 dark:hover:bg-blue-400"
+                      >
+                        {isSaving ? "Saving..." : "Add"}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <input
+                        type="date"
+                        className="border p-1 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        placeholder="Due date"
+                      />
+                      <select
+                        className="border p-1 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value)}
+                      >
+                        <option value="">--select priority--</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+
+                    <textarea
+                      className="border p-1 rounded w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                      placeholder="Notes..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows="2"
+                    />
+
+                    <input
+                      className="border p-1 rounded w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                      placeholder="Labels (comma separated)..."
+                      value={labels}
+                      onChange={(e) => setLabels(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {filteredTodos.length === 0 ? (
-              <p className="text-gray-500 text-center mt-6">
+              <p className="text-gray-500 dark:text-gray-400 text-center mt-6">
                 🎯 This checklist is empty
                 <br /> Add your first task above
               </p>
@@ -296,27 +424,35 @@ export default function Todos() {
                 {filteredTodos.map((t) => (
                   <li
                     key={t._id}
-                    onDragOver={(e) => handleDragOver(e, t._id)}
-                    onDrop={() => handleDrop(t._id)}
+                    onDragOver={(e) =>
+                      filter !== "trash" && handleDragOver(e, t._id)
+                    }
+                    onDrop={() => filter !== "trash" && handleDrop(t._id)}
                     className={`flex items-center gap-2 p-2 rounded transition-all
     ${
-      dragOverId === t._id && dragId !== t._id
-        ? "border-2 border-dashed border-blue-400 bg-blue-50"
+      filter !== "trash" && dragOverId === t._id && dragId !== t._id
+        ? "border-2 border-dashed border-blue-400 bg-blue-50 dark:bg-blue-900/20"
         : t.completed
-        ? "bg-gray-100 opacity-70"
-        : "border hover:bg-gray-50"
+        ? "bg-gray-100 dark:bg-gray-700 opacity-70"
+        : "border hover:bg-gray-50 dark:hover:bg-gray-700"
     }
-    ${dragId === t._id ? "scale-[1.02] shadow-md bg-white" : ""}`}
+    ${
+      filter !== "trash" && dragId === t._id
+        ? "scale-[1.02] shadow-md bg-white dark:bg-gray-800"
+        : ""
+    }`}
                   >
                     {/* Drag handle with GripVertical icon */}
-                    <div
-                      draggable
-                      onDragStart={() => setDragId(t._id)}
-                      className="cursor-move p-1 text-gray-400 select-none"
-                      title="Drag to reorder"
-                    >
-                      <GripVertical size={18} />
-                    </div>
+                    {filter !== "trash" && (
+                      <div
+                        draggable
+                        onDragStart={() => setDragId(t._id)}
+                        className="cursor-move p-1 text-gray-400 select-none"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical size={18} />
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-2 flex-1">
                       <input
@@ -326,36 +462,131 @@ export default function Todos() {
                       />
 
                       {editingId === t._id ? (
-                        <input
-                          ref={editInputRef}
-                          value={editTitle}
-                          onChange={(e) => setEditTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") saveEdit(t._id);
-                            if (e.key === "Escape") cancelEdit();
-                          }}
-                          className="border p-1 rounded flex-1"
-                        />
+                        <div className="flex-1 space-y-2">
+                          <input
+                            ref={editInputRef}
+                            value={editTitle}
+                            onChange={(e) => setEditTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveEdit(t._id);
+                              if (e.key === "Escape") cancelEdit();
+                            }}
+                            className="border p-1 rounded w-full dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                          />
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <input
+                              type="date"
+                              className="border p-1 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              value={editDueDate}
+                              onChange={(e) => setEditDueDate(e.target.value)}
+                            />
+                            <select
+                              className="border p-1 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                              value={editPriority}
+                              onChange={(e) => setEditPriority(e.target.value)}
+                            >
+                              <option value="">--select priority--</option>
+                              <option value="low">Low</option>
+                              <option value="medium">Medium</option>
+                              <option value="high">High</option>
+                            </select>
+                          </div>
+                          <textarea
+                            className="border p-1 rounded w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                            placeholder="Notes..."
+                            value={editNotes}
+                            onChange={(e) => setEditNotes(e.target.value)}
+                            rows="2"
+                          />
+                          <input
+                            className="border p-1 rounded w-full text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                            placeholder="Labels..."
+                            value={editLabels}
+                            onChange={(e) => setEditLabels(e.target.value)}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => saveEdit(t._id)}
+                              disabled={isSaving}
+                              className="text-green-600 dark:text-green-400 text-sm hover:text-green-700 dark:hover:text-green-300"
+                            >
+                              {isSaving ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="text-gray-600 dark:text-gray-400 text-sm hover:text-gray-700 dark:hover:text-gray-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <span
-                          onClick={() => {
-                            setEditingId(t._id);
-                            setEditTitle(t.title);
-                          }}
-                          className={`cursor-pointer flex-1 ${
-                            t.completed ? "line-through text-gray-400" : ""
+                        <div
+                          className={`flex-1 ${
+                            filter !== "trash" ? "cursor-pointer" : ""
                           }`}
+                          onClick={() => filter !== "trash" && startEdit(t)}
                         >
-                          {t.title}
-                        </span>
+                          <div
+                            className={`font-medium ${
+                              t.completed
+                                ? "line-through text-gray-400 dark:text-gray-500"
+                                : ""
+                            }`}
+                          >
+                            {t.title}
+                          </div>
+                          {t.dueDate && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Due: {new Date(t.dueDate).toLocaleDateString()}
+                            </div>
+                          )}
+                          {t.priority && (
+                            <div
+                              className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                                t.priority === "high"
+                                  ? "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800"
+                                  : t.priority === "low"
+                                  ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                  : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800"
+                              }`}
+                            >
+                              {t.priority === "high" && "🔴 "}
+                              {t.priority === "low" && "🟢 "}
+                              {t.priority === "medium" && "🟡 "}
+                              {t.priority.toUpperCase()}
+                            </div>
+                          )}
+                          {t.notes && (
+                            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 max-w-xs truncate">
+                              {t.notes}
+                            </div>
+                          )}
+                          {t.labels && t.labels.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {t.labels.map((label, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 px-1 rounded"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
 
                     <button
-                      onClick={() => deleteTodo(t._id)}
-                      className="text-red-500 text-sm"
+                      onClick={() =>
+                        filter === "trash"
+                          ? restoreTodo(t._id)
+                          : deleteTodo(t._id)
+                      }
+                      className="text-red-500 dark:text-red-400 text-sm hover:text-red-600 dark:hover:text-red-300"
                     >
-                      Delete
+                      {filter === "trash" ? "Restore" : "Trash"}
                     </button>
                   </li>
                 ))}

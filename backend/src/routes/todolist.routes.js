@@ -6,15 +6,28 @@ import {
   deleteList,
   updateListTitle,
   getListById,
+  restoreList,
+  getDeletedLists,
+  permanentDeleteList,
 } from "../controllers/todolist.controller.js";
 
 const router = Router();
 router.use(protect);
 
+// STATIC routes first
+router.get("/deleted", getDeletedLists);
+
+// BASE routes
 router.get("/", getLists);
-router.get("/:id", getListById);
 router.post("/", createList);
+
+// PARAM routes
+router.get("/:id", getListById);
 router.put("/:id", updateListTitle);
 router.delete("/:id", deleteList);
+
+// NESTED param routes
+router.put("/:id/restore", restoreList);
+router.delete("/:id/permanent", permanentDeleteList);
 
 export default router;

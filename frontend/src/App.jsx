@@ -3,8 +3,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Home from "./pages/Home";
 import Todos from "./pages/Todos";
+import Trash from "./pages/Trash";
 import ProtectedRoute from "./components/ProtectedRoute";
-import Navbar from "./components/Navbar";
+import Sidebar from "./components/Sidebar";
 
 export default function App() {
   return (
@@ -16,10 +17,11 @@ export default function App() {
 
         {/* Protected */}
         <Route element={<ProtectedRoute />}>
-          <Route element={<Navbar />}>
+          <Route element={<Sidebar />}>
             <Route path="/home" element={<Home />} />
             <Route path="/todos" element={<Todos />} />
             <Route path="/todos/:listId" element={<Todos />} />
+            <Route path="/trash" element={<Trash />} />
           </Route>
         </Route>
 
